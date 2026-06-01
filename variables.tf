@@ -5,5 +5,6 @@ variable "aws_region" {
 
 variable "project_name" {
   type    = string
-  default = "caas-portfolio"
+  default = "tf-app"
 }
+
