@@ -16,6 +16,7 @@ resource "aws_vpc" "main" {
   }
 }
 
+
 # subnet
 resource "aws_subnet" "public_a" {
   # どこのVPCに入るか指定
@@ -58,5 +59,202 @@ resource "aws_subnet" "private_c" {
 
   tags = {
     Name = "${var.project_name}_private_public_c"
+  }
+}
+
+
+# IGW作成
+resource "aws_internet_gateway" "main"{
+  vpc_id = aws_vpc.main.id
+
+  tags ={
+    Name = "${var.project_name}_igw"
+  }
+}
+
+
+# Public Route Table
+resource "aws_route_table" "public"{
+  vpc_id = aws_vpc.main.id
+
+  #ルートの設定
+  route{
+    #0.0.0.0/0宛の通信をIGWに送る
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+  tags = {
+    Name = "${var.project_name}_public_rt"
+  }
+}
+
+
+# PublicRouteTableをPublicSubnetと紐付ける
+resource "aws_route_table_association" "public_a"{
+  subnet_id = aws.subnet.public_a.id
+  route_table_id = aws_route_table.public.id
+}
+resource "aws_route_table_association" "public_c"{
+  subnet_id = aws.subnet.public_c.id
+  route_table_id = aws_route_table.public.id
+}
+
+
+# NAT Gateway用のElasticIP作成
+resource "aws_eip" "nat_a"{
+  domain ="vpc"
+
+  tags = {
+    Name = "${var.project_name}_nat_a_eip"
+  }
+}
+
+resource "aws_eip" "nat_c"{
+  domain ="vpc"
+
+  tags = {
+    Name = "${var.project_name}_nat_c_eip"
+  }
+}
+
+
+# NAT GW作成
+resource "aws_nat_gateway" "nat_a" {
+  allocation_id = aws_eip.nat_a.id
+  subnet_id = aws_subnet.public_a.id
+
+  tags = {
+    Name = "${var.project_name}_nat_a"
+  }
+}
+
+resource "aws_nat_gateway" "nat_c" {
+  allocation_id = aws_eip.nat_c.id
+  subnet_id = aws_subnet.public_c.id
+
+  tags = {
+    Name = "${var.project_name}_nat_c"
+  }
+}
+
+# Private Route Table
+resource "aws_route_table" "private_a" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat_a.id
+  }
+
+  tags = {
+    Name = "${var.project_name}_private_a_rt"
+  }
+}
+resource "aws_route_table" "private_c" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat_c.id
+  }
+
+  tags = {
+    Name = "${var.project_name}_private_c_rt"
+  }
+}
+
+
+# PrivateRouteTableをPrivateSubnetと紐付ける
+resource "aws_route_table_association" "private_a" {
+  subnet_id = aws_subnet.private_a.id
+  route_table_id = aws_route_table.private_a.id
+}
+
+resource "aws_route_table_association" "private_c" {
+  subnet_id = aws_subnet.private_c.id
+  route_table_id = aws_route_table.private_c.id
+}
+
+
+# SG作成
+# ALB用
+resource "aws_security_group" "alb" {
+  name = "${var.project_name}_alb_sg"
+  description = "Security group for ALB"
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    description = "Allow HTTP from Internet"
+    from_port = 80
+    to_port = 80
+    protocol = "tcp"
+    cifr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Allow HTTPS from Internet"
+    from_port = 443
+    to_port = 443
+    protocol = "tcp"
+    cifr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow all outbound"
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0]
+  }
+
+  tags = {
+    Name = "${var.project_name}_alb_sg"
+  }
+
+}
+
+# ECS用
+resource "aws_security_group" "ecs" {
+  name = "${var.project_name}_ecs_sg"
+  description = "Security group for ECS tasks"
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    description = "Allow app traffic from ALB"
+    from_port = 3000
+    to_port = 3000
+    protocol = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    description = "Allow all outbound"
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0]
+  }
+
+  tags = {
+    Name = "${var.project_name}_ecs_sg"
+  }
+}
+
+# RDS用
+resource "aws_security_group" "rds" { 
+  name = "${var.project_name}_rds_sg"
+  description = "Security group for RDS"
+  vpc_id = aws_vpc.main.id
+
+  ingress { 
+    description = "Allow MySQL from ECS"
+    from_port = 3306
+    to_port = 3306
+    protocol = "tcp"
+    security_groups = [aws_security_group.ecs.id]
+  }
+
+  tags = {
+    Name ="${var.project_name}_rds_sg"
   }
 }
