@@ -221,8 +221,8 @@ resource "aws_security_group" "ecs" {
 
   ingress {
     description = "Allow app traffic from ALB"
-    from_port = 3000
-    to_port = 3000
+    from_port = 3001
+    to_port = 3001
     protocol = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -257,4 +257,33 @@ resource "aws_security_group" "rds" {
   tags = {
     Name ="${var.project_name}_rds_sg"
   }
+}
+
+# ECS Task Execution Role作成
+resource "aws_iam_role" "ecs_task_execution_role" {
+  name = "${var.project_name}_ecs_task_exection_role"
+
+  # 使えるロール
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Principal = {
+          # ECS Taskだけ
+          Service = "ecs-tasks.amazonaws.com"
+        }
+
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# Execution Roleへポリシー付与
+resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
+  role = aws_iam_role.ecs_task_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
