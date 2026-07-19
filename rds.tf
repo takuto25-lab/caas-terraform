@@ -25,7 +25,7 @@ resource "aws_db_instance" "main" {
   allocated_storage = 20
   storage_type = "gp3"
 
-  db_name = "caas"
+  db_name = "sample"
   username = "admin"
   password = "Password123!"
 
@@ -35,9 +35,8 @@ resource "aws_db_instance" "main" {
   publicly_accessible = false
   multi_az = false
 
-  # バックアップ設定（7日間保持、毎日17~18に実施）
-  backup_retention_period = 7
-  backup_window = "17:00-18:00"
+  # バックアップ設定(今はなし)
+  backup_retention_period = 0
 
   skip_final_snapshot = true
   
@@ -60,7 +59,8 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
   secret_id = aws_secretsmanager_secret.db_credentials.id
 
   secret_string = jsonencode({
-    username = "admin"
-    password = "Password123!"
+    DB_USER = "admin"
+    DB_PASSWORD = "Password123!"
   })
 }
+   

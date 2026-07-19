@@ -32,7 +32,7 @@ resource "aws_lb_target_group" "main" {
   target_type = "ip"
 
   health_check {
-    path = "/"
+    path = "/login"
     protocol = "HTTP"
     # 200なら正常
     matcher = "200"
